@@ -219,7 +219,7 @@ For building binary if you wish to build from source, then `cargo` is required. 
     "nvim-lua/plenary.nvim",
     "MunifTanjim/nui.nvim",
     --- The below dependencies are optional,
-    "echasnovski/mini.pick", -- for file_selector provider mini.pick
+    "nvim-mini/mini.pick", -- for file_selector provider mini.pick
     "nvim-telescope/telescope.nvim", -- for file_selector provider telescope
     "hrsh7th/nvim-cmp", -- autocompletion for avante commands and mentions
     "ibhagwan/fzf-lua", -- for file_selector provider fzf
@@ -500,10 +500,13 @@ _See [config.lua#L9](./lua/avante/config.lua) for the full config_
     support_paste_from_clipboard = false,
     minimize_diff = true, -- Whether to remove unchanged lines when applying a code block
     enable_token_counting = true, -- Whether to enable token counting. Default to true.
-    auto_approve_tool_permissions = false, -- Default: show permission prompts for all tools
+    auto_add_current_file = true, -- Whether to automatically add the current file when opening a new chat. Default to true.
+    auto_approve_tool_permissions = true, -- Default: auto-approve all tools (no prompts)
     -- Examples:
-    -- auto_approve_tool_permissions = true,                -- Auto-approve all tools (no prompts)
+    -- auto_approve_tool_permissions = false,                -- Show permission prompts for all tools
     -- auto_approve_tool_permissions = {"bash", "replace_in_file"}, -- Auto-approve specific tools only
+    ---@type "popup" | "inline_buttons"
+    confirmation_ui_style = "inline_buttons",
   },
   prompt_logger = { -- logs prompts to disk (timestamped, for replay/debugging)
     enabled = true, -- toggle logging entirely
@@ -1205,6 +1208,22 @@ To use ACP-compatible agents with Avante.nvim, you need to configure an ACP prov
 }
 ```
 
+#### Goose with ACP
+```lua
+{
+  provider = "goose",
+  -- other configuration options...
+}
+```
+
+#### Codex with ACP
+```lua
+{
+  provider = "codex",
+  -- other configuration options...
+}
+```
+
 ### ACP Configuration
 
 ACP providers are configured in the `acp_providers` section of your configuration:
@@ -1226,6 +1245,17 @@ ACP providers are configured in the `acp_providers` section of your configuratio
       env = {
         NODE_NO_WARNINGS = "1",
         ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY"),
+      },
+    },
+    ["goose"] = {
+      command = "goose",
+      args = { "acp" },
+    },
+    ["codex"] = {
+      command = "codex-acp",
+      env = {
+        NODE_NO_WARNINGS = "1",
+        OPENAI_API_KEY = os.getenv("OPENAI_API_KEY"),
       },
     },
   },

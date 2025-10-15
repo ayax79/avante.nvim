@@ -118,8 +118,6 @@ vim.g.avante_login = vim.g.avante_login
 ---@field is_calling boolean | nil
 ---@field original_content AvanteLLMMessageContent | nil
 ---@field acp_tool_call? avante.acp.ToolCall
----@field permission_options? avante.acp.PermissionOption[]
----@field is_permission_confirming? boolean
 
 ---@class AvanteLLMToolResult
 ---@field tool_name string
@@ -232,7 +230,7 @@ vim.g.avante_login = vim.g.avante_login
 ---@alias AvanteMessagesParser fun(self: AvanteProviderFunctor, opts: AvantePromptOptions): AvanteChatMessage[]
 ---
 ---@class AvanteCurlOutput: {url: string, proxy: string, insecure: boolean, body: table<string, any> | string, headers: table<string, string>, rawArgs: string[] | nil}
----@alias AvanteCurlArgsParser fun(self: AvanteProviderFunctor, prompt_opts: AvantePromptOptions): AvanteCurlOutput
+---@alias AvanteCurlArgsParser fun(self: AvanteProviderFunctor, prompt_opts: AvantePromptOptions): (AvanteCurlOutput | nil)
 ---
 ---@alias AvanteResponseParser fun(self: AvanteProviderFunctor, ctx: any, data_stream: string, event_state: string, opts: AvanteHandlerOptions): nil
 ---
@@ -503,9 +501,9 @@ vim.g.avante_login = vim.g.avante_login
 ---@class avante.ChatHistory
 ---@field title string
 ---@field timestamp string
----@field messages avante.HistoryMessage[] | nil
----@field entries avante.ChatHistoryEntry[] | nil
----@field todos avante.TODO[] | nil
+---@field messages avante.HistoryMessage[]
+---@field entries avante.ChatHistoryEntry[]
+---@field todos avante.TODO[]
 ---@field memory avante.ChatMemory | nil
 ---@field filename string
 ---@field system_prompt string | nil

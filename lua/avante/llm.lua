@@ -14,7 +14,8 @@ local Providers = require("avante.providers")
 local LLMToolHelpers = require("avante.llm_tools.helpers")
 local LLMTools = require("avante.llm_tools")
 local History = require("avante.history")
-local Highlights = require("avante.highlights")
+local HistoryRender = require("avante.history.render")
+local ACPConfirmAdapter = require("avante.ui.acp_confirm_adapter")
 
 ---@class avante.LLM
 local M = {}
@@ -49,10 +50,9 @@ function M.summarize_memory(prev_memory, history_messages, cb)
     cb(nil)
     return
   end
-  local Render = require("avante.history.render")
   local conversation_items = vim
     .iter(history_messages)
-    :map(function(msg) return msg.message.role .. ": " .. Render.message_to_text(msg, history_messages) end)
+    :map(function(msg) return msg.message.role .. ": " .. HistoryRender.message_to_text(msg, history_messages) end)
     :totable()
   local conversation_text = table.concat(conversation_items, "\n")
   local user_prompt = "Here is the conversation so far:\n"
@@ -548,8 +548,11 @@ function M.curl(opts)
     if orig_on_stop then return orig_on_stop(stop_opts) end
   end
 
-  ---@type AvanteCurlOutput
   local spec = provider:parse_curl_args(prompt_opts)
+  if not spec then
+    handler_opts.on_stop({ reason = "error", error = "Provider configuration error" })
+    return
+  end
 
   ---@type string
   local current_event_state = nil
@@ -904,7 +907,7 @@ function M._stream_acp(opts)
     end
     if opts.on_messages_add then
       opts.on_messages_add(messages)
-      vim.schedule(function() vim.cmd("redraw") end)
+      -- vim.schedule(function() vim.cmd("redraw") end)
     end
   end
   local function add_tool_call_message(update)
@@ -989,6 +992,24 @@ function M._stream_acp(opts)
           end
           if update.sessionUpdate == "agent_thought_chunk" then
             if update.content.type == "text" then
+              local messages = opts.get_history_messages()
+              local last_message = messages[#messages]
+              if last_message and last_message.message.role == "assistant" then
+                local is_thinking = false
+                local content = last_message.message.content
+                if type(content) == "table" then
+                  for idx, item in ipairs(content) do
+                    if type(item) == "table" and item.type == "thinking" then
+                      is_thinking = true
+                      content[idx].thinking = content[idx].thinking .. update.content.text
+                    end
+                  end
+                end
+                if is_thinking then
+                  on_messages_add({ last_message })
+                  return
+                end
+              end
               local message = History.Message:new("assistant", {
                 type = "thinking",
                 thinking = update.content.text,
@@ -1040,33 +1061,9 @@ function M._stream_acp(opts)
             Utils.error("Avante sidebar not found")
             return
           end
+
           ---@cast tool_call avante.acp.ToolCall
-          local items = vim
-            .iter(options)
-            :map(function(item)
-              local icon = item.kind == "allow_once" and "" or ""
-              if item.kind == "allow_always" then icon = "" end
-              local hl = nil
-              if item.kind == "reject_once" or item.kind == "reject_always" then
-                hl = Highlights.BUTTON_DANGER_HOVER
-              end
-              return {
-                id = item.optionId,
-                name = item.name,
-                icon = icon,
-                hl = hl,
-              }
-            end)
-            :totable()
-          sidebar.permission_button_options = items
-          sidebar.permission_handler = function(id)
-            callback(id)
-            sidebar.scroll = true
-            sidebar.permission_button_options = nil
-            sidebar.permission_handler = nil
-            sidebar._history_cache_invalidated = true
-            sidebar:update_content("")
-          end
+
           local message = tool_call_messages[tool_call.toolCallId]
           if not message then
             message = add_tool_call_message(tool_call)
@@ -1076,7 +1073,29 @@ function M._stream_acp(opts)
               message.acp_tool_call = vim.tbl_deep_extend("force", message.acp_tool_call, tool_call)
             end
           end
+
           on_messages_add({ message })
+
+          local description = HistoryRender.get_tool_display_name(message)
+          LLMToolHelpers.confirm(description, function(ok)
+            local acp_mapped_options = ACPConfirmAdapter.map_acp_options(options)
+
+            if ok and opts.session_ctx and opts.session_ctx.always_yes then
+              callback(acp_mapped_options.all)
+            elseif ok then
+              callback(acp_mapped_options.yes)
+            else
+              callback(acp_mapped_options.no)
+            end
+
+            sidebar.scroll = true
+            sidebar._history_cache_invalidated = true
+            sidebar:update_content("")
+          end, {
+            focus = true,
+            skip_reject_prompt = true,
+            permission_options = options,
+          }, opts.session_ctx, tool_call.kind)
         end,
         on_read_file = function(path, line, limit, callback)
           local abs_path = Utils.to_absolute_path(path)
